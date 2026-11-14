@@ -8,30 +8,35 @@ from sklearn.model_selection import train_test_split
 # CONFIGURACIÓN DE LA PÁGINA
 # ==============================================================================
 st.set_page_config(
-    page_title="Gerencia Financiera - Analítica Hospitalaria",
+    page_title="Analítica Financiera - Centros de Costos",
     page_icon="🏥",
     layout="wide"
 )
 
-st.title("🏥 Analítica Financiera y Toma de Decisiones Gerenciales")
+st.title("🏥 Analítica de Costos e Ingresos Operativos (CRISP-DM)")
 st.markdown("**Estudiante:** Laura Juliana Loaiza Saavedra | **ID:** 428429 | **UNIMINUTO**")
 st.markdown("---")
 
 # ==============================================================================
-# CARGA Y ENTRENAMIENTO DEL MODELO (CACHEADO)
+# FASE 1 Y 2: CARGA Y COMPRENSIÓN DE DATOS (Con caché)
 # ==============================================================================
 @st.cache_resource
-def cargar_y_entrenar():
+def cargar_y_procesar_datos():
     archivo_excel = 'CONSOLIDADO.xlsx'
     nombre_hoja = 'Plantilla De Informe'
     df = pd.read_excel(archivo_excel, sheet_name=nombre_hoja)
     
-    columna_eps = 'NOMBRE ENTIDAD' if 'NOMBRE ENTIDAD' in df.columns else 'ENTIDAD'
+    # Identificar columnas clave de forma segura según la estructura del Excel
+    col_unidad = 'UNIDAD FUNCIONAL' if 'UNIDAD FUNCIONAL' in df.columns else df.columns[0]
+    col_detalle = 'C. COSTOS DETALLE' if 'C. COSTOS DETALLE' in df.columns else df.columns[1]
+    col_emisor = 'C. COSTOS ENCAB-EMISOR' if 'C. COSTOS ENCAB-EMISOR' in df.columns else df.columns[2]
     
-    df['TIPO_SERVICIO_COD'] = pd.factorize(df['TIPO SERVICIO'])[0]
-    df['EPS_COD'] = pd.factorize(df[columna_eps])[0]
+    # Codificación para Machine Learning
+    df['UNIDAD_COD'] = pd.factorize(df[col_unidad])[0]
+    df['DETALLE_COD'] = pd.factorize(df[col_detalle])[0]
+    df['EMISOR_COD'] = pd.factorize(df[col_emisor])[0]
     
-    features = ['EDAD', 'CANTIDAD', 'TIPO_SERVICIO_COD', 'EPS_COD']
+    features = ['EDAD', 'CANTIDAD', 'UNIDAD_COD', 'DETALLE_COD', 'EMISOR_COD']
     target = 'VALOR FACTURADO'
     
     X = df[features].dropna()
@@ -39,13 +44,14 @@ def cargar_y_entrenar():
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
+    # Modelo Random Forest (Fase 4: Modelado)
     modelo = RandomForestRegressor(n_estimators=100, random_state=42)
     modelo.fit(X_train, y_train)
     
-    return modelo, df, columna_eps
+    return modelo, df, col_unidad, col_detalle, col_emisor
 
 try:
-    modelo_rf, df, columna_eps = cargar_y_entrenar()
+    modelo_rf, df, col_unidad, col_detalle, col_emisor = cargar_y_procesar_datos()
     datos_cargados = True
 except Exception as e:
     datos_cargados = False
@@ -54,73 +60,73 @@ except Exception as e:
 if datos_cargados:
     
     # ==============================================================================
-    # 💎 SECCIÓN NUEVA: ENFOQUE GERENCIAL (REVENUE DRIVERS)
+    # FASE 5: EVALUACIÓN FINANCIERA Y COMPARATIVA DE CENTROS DE COSTOS
     # ==============================================================================
-    st.header("📊 Enfoque Gerencial: ¿Cuáles son los Servicios que más Dinero Dan?")
-    
-    # Agrupamos por servicio para ver facturación total y volumen
-    resumen_servicios = df.groupby('NOMBRE ARTICULO').agg(
-        Facturacion_Total=('VALOR FACTURADO', 'sum'),
-        Atenciones_Totales=('VALOR FACTURADO', 'count'),
-        Costo_Promedio=('VALOR FACTURADO', 'mean')
-    ).reset_index().sort_values(by='Facturacion_Total', ascending=False)
-    
-    top_1_servicio = resumen_servicios.iloc[0]
-    
-    # Mostramos métricas ejecutivas clave arriba
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.metric(
-            label="💎 Servicio Estrella (Mayor Facturación Total)", 
-            value=f"${top_1_servicio['Facturacion_Total']:,.0f}",
-            delta=f"{top_1_servicio['NOMBRE ARTICULO']}"
-        )
-    with col_m2:
-        st.metric(
-            label="📈 Facturación Global Acumulada", 
-            value=f"${df['VALOR FACTURADO'].sum():,.0f}"
-        )
-    with col_m3:
-        st.metric(
-            label="🏥 Total de Atenciones Analizadas", 
-            value=f"{df.shape[0]:,} registros"
-        )
-        
-    st.markdown("---")
+    st.header("📊 Comparativa de Costos e Ingresos por Centro de Costos")
+    st.markdown("Este módulo permite a la gerencia contrastar el rendimiento financiero y operativo entre las unidades funcionales y los centros de costos.")
 
-    # Gráfico de barras interactivo con Streamlit para el Top 10 de servicios por ingresos
-    st.subheader("🏆 Top 10 de Servicios Generadores de Ingresos (Revenue Drivers)")
-    st.markdown("Este gráfico muestra a la gerencia qué procedimientos son los que verdaderamente sostienen el balance financiero positivo de la institución.")
-    
-    top_10_ingresos = resumen_servicios.head(10).set_index('NOMBRE ARTICULO')['Facturacion_Total']
-    st.bar_chart(top_10_ingresos, color="#20B2AA")
+    # Métricas ejecutivas globales
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="💰 Facturación Global Acumulada", value=f"${df['VALOR FACTURADO'].sum():,.0f}")
+    with col2:
+        st.metric(label="🏥 Total Registros Analizados", value=f"{df.shape[0]:,}")
+    with col3:
+        st.metric(label="📈 Promedio por Atenciones", value=f"${df['VALOR FACTURADO'].mean():,.2f}")
 
     st.markdown("---")
 
+    # Pestañas de análisis por Centro de Costos y Unidad Funcional
+    tab1, tab2, tab3 = st.tabs(["Unidad Funcional", "Centro de Costos (Detalle)", "Centro de Costos (Emisor)"])
+
+    with tab1:
+        st.subheader("Rendimiento Financiero por Unidad Funcional")
+        df_unidad = df.groupby(col_unidad)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
+        st.bar_chart(df_unidad.set_index(col_unidad), color="#20B2AA")
+        st.dataframe(df_unidad, use_container_width=True)
+
+    with tab2:
+        st.subheader("Rendimiento por Centro de Costos Detalle")
+        df_detalle = df.groupby(col_detalle)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
+        st.bar_chart(df_detalle.set_index(col_detalle), color="#4682B4")
+        st.dataframe(df_detalle, use_container_width=True)
+
+    with tab3:
+        st.subheader("Rendimiento por Centro de Costos Emisor")
+        df_emisor = df.groupby(col_emisor)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
+        st.bar_chart(df_emisor.set_index(col_emisor), color="#9370DB")
+        st.dataframe(df_emisor, use_container_width=True)
+
     # ==============================================================================
-    # PANEL LATERAL Y SIMULADOR PREDICTIVO
+    # FASE 6: SIMULADOR PREDICTIVO (Panel Lateral)
     # ==============================================================================
     st.sidebar.header("🛠️ Simulador Predictivo de Costos")
-    st.sidebar.markdown("Estime el valor de una atención para la toma de decisiones:")
+    st.sidebar.markdown("Estime la facturación según los centros de costos:")
 
     edad = st.sidebar.slider("Edad del Paciente", 0, 100, 35)
-    cantidad = st.sidebar.number_input("Cantidad de Procedimientos", min_value=1, max_value=50, value=1)
+    cantidad = st.sidebar.number_input("Cantidad", min_value=1, max_value=50, value=1)
 
-    tipo_servicio_lista = df['TIPO SERVICIO'].dropna().unique()
-    tipo_servicio_sel = st.sidebar.selectbox("Tipo de Servicio", tipo_servicio_lista)
+    unidad_lista = df[col_unidad].dropna().unique()
+    unidad_sel = st.sidebar.selectbox("Unidad Funcional", unidad_lista)
 
-    eps_lista = df[columna_eps].dropna().unique()
-    eps_sel = st.sidebar.selectbox("Entidad / EPS", eps_lista)
+    detalle_lista = df[col_detalle].dropna().unique()
+    detalle_sel = st.sidebar.selectbox("C. Costos Detalle", detalle_lista)
 
-    tipo_servicio_cod = list(tipo_servicio_lista).index(tipo_servicio_sel)
-    eps_cod = list(eps_lista).index(eps_sel)
+    emisor_lista = df[col_emisor].dropna().unique()
+    emisor_sel = st.sidebar.selectbox("C. Costos Emisor", emisor_lista)
+
+    # Codificación de la selección del usuario
+    u_cod = list(unidad_lista).index(unidad_sel)
+    d_cod = list(detalle_lista).index(detalle_sel)
+    e_cod = list(emisor_lista).index(emisor_sel)
 
     if st.sidebar.button("🚀 Calcular Valor Estimado", type="primary"):
         entrada = pd.DataFrame({
             'EDAD': [edad],
             'CANTIDAD': [cantidad],
-            'TIPO_SERVICIO_COD': [tipo_servicio_cod],
-            'EPS_COD': [eps_cod]
+            'UNIDAD_COD': [u_cod],
+            'DETALLE_COD': [d_cod],
+            'EMISOR_COD': [e_cod]
         })
         
         prediccion = modelo_rf.predict(entrada)[0]
