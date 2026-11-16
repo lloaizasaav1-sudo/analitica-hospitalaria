@@ -19,8 +19,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏥 Sistema de Inteligencia Financiera y Costos Hospitalarios")
-st.markdown("**Proyecto Académico & Gestión Gerencial** | *Estudiante:* Laura Juliana Loaiza Saavedra (ID: 428429) | *Institución:* UNIMINUTO")
+# ==============================================================================
+# CABECERA INSTITUCIONAL CON LOS DOS LOGOS DEL HOSPITAL
+# ==============================================================================
+col_logo1, col_titulo, col_logo2 = st.columns([1, 4, 1])
+
+with col_logo1:
+    try:
+        st.image("logo1.png", width=120) # Primer logo del hospital
+    except:
+        st.write("📌 [Logo 1]")
+
+with col_titulo:
+    st.title("🏥 Inteligencia Financiera y Costos Hospitalarios")
+    st.markdown("**E.S.E. Hospital Local de Yotoco** | *Autora:* Laura Juliana Loaiza Saavedra (ID: 428429) - **UNIMINUTO**")
+
+with col_logo2:
+    try:
+        st.image("logo2.png", width=120) # Segundo logo del hospital
+    except:
+        st.write("📌 [Logo 2]")
+
 st.markdown("---")
 
 # ==============================================================================
