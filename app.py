@@ -43,10 +43,17 @@ with col_logo2:
 st.markdown("---")
 
 # ==============================================================================
-# MÓDULO DE CARGA DE DATOS (DINÁMICO: ARCHIVO PROPIO O PREDETERMINADO)
+# PANEL LATERAL: CARGA DE ARCHIVO Y SELECCIÓN DE PERIODO (MES / AÑO)
 # ==============================================================================
-st.sidebar.header("📁 Carga de Datos Mensuales")
-st.sidebar.markdown("Suba el archivo Excel de facturación mensual o utilice el predeterminado del sistema:")
+st.sidebar.header("📁 Carga de Datos y Periodo")
+st.sidebar.markdown("Suba el archivo Excel de facturación y especifique el periodo correspondiente:")
+
+# Selector de Mes y Año
+mes_seleccionado = st.sidebar.selectbox(
+    "Mes de Facturación", 
+    ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+)
+anio_seleccionado = st.sidebar.selectbox("Año", [2026, 2025, 2024, 2023])
 
 archivo_subido = st.sidebar.file_uploader("Cargar Facturación Mensual (.xlsx)", type=["xlsx"])
 
@@ -59,18 +66,17 @@ def cargar_datos_por_defecto():
 
 if archivo_subido is not None:
     try:
-        # Lee el archivo Excel que el usuario suba a la interfaz
         df = pd.read_excel(archivo_subido)
-        st.sidebar.success("✅ ¡Archivo mensual cargado con éxito!")
+        st.sidebar.success(f"✅ Archivo cargado correctamente para **{mes_seleccionado} {anio_seleccionado}**")
         datos_cargados = True
     except Exception as e:
         st.sidebar.error(f"⚠️ Error al leer el archivo subido: {e}")
         datos_cargados = False
 else:
-    # Si no suben nada, usa el archivo base del repositorio
     df = cargar_datos_por_defecto()
     if df is not None:
         datos_cargados = True
+        st.sidebar.info(f"📌 Usando archivo predeterminado del sistema (**Periodo: {mes_seleccionado} {anio_seleccionado}**).")
     else:
         datos_cargados = False
         st.warning("📌 Por favor, suba un archivo Excel de facturación en el panel lateral para iniciar el análisis.")
@@ -87,7 +93,7 @@ if datos_cargados:
     col_factura = 'VALOR FACTURADO' if 'VALOR FACTURADO' in df.columns else 'VALOR'
 
     # ==============================================================================
-    # PANEL LATERAL: FILTROS GERENCIALES Y EXPORTACIÓN
+    # FILTROS GERENCIALES ADICIONALES
     # ==============================================================================
     st.sidebar.markdown("---")
     st.sidebar.header("🎛️ Filtros Gerenciales")
@@ -103,11 +109,19 @@ if datos_cargados:
     st.sidebar.markdown("---")
     st.sidebar.header("📥 Descarga de Informes")
     
-    def convertir_a_excel(df_exportar):
+    # Función para convertir dataframe a Excel incluyendo metadatos del periodo
+    def convertir_a_excel(df_exportar, nombre_hoja_excel):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_exportar.to_excel(writer, index=False, sheet_name='Informe_Gerencial')
+            df_exportar.to_excel(writer, index=False, sheet_name=nombre_hoja_excel)
         return output.getvalue()
+
+    # ==============================================================================
+    # CABECERA VISIBLE DEL PERIODO SELECCIONADO
+    # ==============================================================================
+    st.subheader(f"📅 Reporte Financiero Correspondiente a: **{mes_seleccionado} de {anio_seleccionado}**")
+    st.markdown(f"**Unidad Funcional Analizada:** `{unidad_seleccionada}`")
+    st.markdown("---")
 
     # ==============================================================================
     # MÉTRICAS EJECUTIVAS GLOBALES
@@ -120,7 +134,7 @@ if datos_cargados:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric(label="💰 Facturación Total Acumulada", value=f"${total_facturado:,.2f}")
+        st.metric(label="💰 Facturación Total del Periodo", value=f"${total_facturado:,.2f}")
     with col2:
         st.metric(label="📋 Volumen Total de Atenciones", value=f"{total_atenciones:,}")
     with col3:
@@ -136,64 +150,4 @@ if datos_cargados:
     col_s1, col_s2 = st.columns(2)
 
     if col_articulo in df_filtrado.columns and col_factura in df_filtrado.columns:
-        resumen_servicios = df_filtrado.groupby(col_articulo)[col_factura].agg(['sum', 'count', 'mean']).reset_index()
-        resumen_servicios.columns = ['Servicio / Artículo', 'Facturación Total ($)', 'Cantidad Atenciones', 'Promedio por Servicio ($)']
-        resumen_servicios = resumen_servicios.sort_values(by='Facturación Total ($)', ascending=False)
-
-        with col_s1:
-            st.subheader("🏆 Top 10 Servicios Estrella (Mayor Ingreso)")
-            top_10 = resumen_servicios.head(10).set_index('Servicio / Artículo')['Facturación Total ($)']
-            st.bar_chart(top_10, color="#1f77b4")
-
-        with col_s2:
-            st.subheader("⚠️ Servicios de Menor Impacto / Facturación")
-            bottom_10 = resumen_servicios.tail(10).set_index('Servicio / Artículo')['Facturación Total ($)']
-            st.bar_chart(bottom_10, color="#ff7f0e")
-
-        excel_servicios = convertir_a_excel(resumen_servicios)
-        st.download_button(
-            label="📥 Descargar Reporte Completo de Servicios (Excel)",
-            data=excel_servicios,
-            file_name="reporte_servicios_financieros.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("ℹ️ No se detectaron las columnas exactas de artículos/servicios para graficar este módulo, pero los datos generales están disponibles.")
-
-    st.markdown("---")
-
-    # ==============================================================================
-    # MÓDULO 2: COMPARATIVA POR CENTROS DE COSTOS Y UNIDADES FUNCIONALES
-    # ==============================================================================
-    st.header("🏢 Rendimiento por Centros de Costos y Unidades Funcionales")
-
-    tab1, tab2, tab3 = st.tabs(["Unidad Funcional", "C. Costos Detalle", "C. Costos Emisor"])
-
-    with tab1:
-        st.subheader("Facturación por Unidad Funcional")
-        df_u = df_filtrado.groupby(col_unidad)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
-        st.bar_chart(df_u.set_index(col_unidad), color="#2ca02c")
-        st.dataframe(df_u, use_container_width=True)
-
-    with tab2:
-        st.subheader("Facturación por Centro de Costos Detalle")
-        df_d = df_filtrado.groupby(col_detalle)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
-        st.bar_chart(df_d.set_index(col_detalle), color="#d62728")
-        st.dataframe(df_d, use_container_width=True)
-
-    with tab3:
-        st.subheader("Facturación por Centro de Costos Emisor")
-        df_e = df_filtrado.groupby(col_emisor)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
-        st.bar_chart(df_e.set_index(col_emisor), color="#9467bd")
-        st.dataframe(df_e, use_container_width=True)
-
-    # Botón global de descarga de datos filtrados
-    st.markdown("---")
-    st.subheader("📦 Exportar Base de Datos Consolidada")
-    excel_global = convertir_a_excel(df_filtrado)
-    st.download_button(
-        label="📥 Descargar Base de Datos Filtrada para Gerencia (.xlsx)",
-        data=excel_global,
-        file_name="datos_financieros_hospital_yotoco.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        resumen_servicios = df_
