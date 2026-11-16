@@ -150,4 +150,31 @@ if datos_cargados:
     col_s1, col_s2 = st.columns(2)
 
     if col_articulo in df_filtrado.columns and col_factura in df_filtrado.columns:
-        resumen_servicios = df_
+        resumen_servicios = df_filtrado.groupby(col_articulo)[col_factura].agg(['sum', 'count', 'mean']).reset_index()
+        resumen_servicios.columns = ['Servicio / Artículo', 'Facturación Total ($)', 'Cantidad Atenciones', 'Promedio por Servicio ($)']
+        resumen_servicios = resumen_servicios.sort_values(by='Facturación Total ($)', ascending=False)
+
+        with col_s1:
+            st.subheader("🏆 Top 10 Servicios Estrella (Mayor Ingreso)")
+            top_10 = resumen_servicios.head(10).set_index('Servicio / Artículo')['Facturación Total ($)']
+            st.bar_chart(top_10, color="#1f77b4")
+
+        with col_s2:
+            st.subheader("⚠️ Servicios de Menor Impacto / Facturación")
+            bottom_10 = resumen_servicios.tail(10).set_index('Servicio / Artículo')['Facturación Total ($)']
+            st.bar_chart(bottom_10, color="#ff7f0e")
+
+        excel_servicios = convertir_a_excel(resumen_servicios, "Servicios_Financieros")
+        st.download_button(
+            label=f"📥 Descargar Reporte de Servicios ({mes_seleccionado} {anio_seleccionado}) - Excel",
+            data=excel_servicios,
+            file_name=f"reporte_servicios_{mes_seleccionado.lower()}_{anio_seleccionado}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("ℹ️ No se detectaron las columnas exactas de artículos/servicios para graficar este módulo.")
+
+    st.markdown("---")
+
+    # ==============================================================================
+    # MÓDULO 2: COMPARATIVA POR CENTROS DE COSTOS Y UNIDADES FUNCIONALES
