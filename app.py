@@ -1,133 +1,167 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+import io
 
 # ==============================================================================
 # CONFIGURACIÓN DE LA PÁGINA
 # ==============================================================================
 st.set_page_config(
-    page_title="Analítica Financiera - Centros de Costos",
+    page_title="Gerencia Financiera - Hospital de Yotoco",
     page_icon="🏥",
     layout="wide"
 )
 
-st.title("🏥 Analítica de Costos e Ingresos Operativos (CRISP-DM)")
-st.markdown("**Estudiante:** Laura Juliana Loaiza Saavedra | **ID:** 428429 | **UNIMINUTO**")
+# Estilo visual corporativo limpio
+st.markdown("""
+    <style>
+        .main { background-color: #f8f9fa; }
+        .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🏥 Sistema de Inteligencia Financiera y Costos Hospitalarios")
+st.markdown("**Proyecto Académico & Gestión Gerencial** | *Estudiante:* Laura Juliana Loaiza Saavedra (ID: 428429) | *Institución:* UNIMINUTO")
 st.markdown("---")
 
 # ==============================================================================
-# FASE 1 Y 2: CARGA Y COMPRENSIÓN DE DATOS (Con caché)
+# CARGA Y PROCESAMIENTO DE DATOS INSTITUCIONALES
 # ==============================================================================
-@st.cache_resource
-def cargar_y_procesar_datos():
+@st.cache_data
+def cargar_datos():
     archivo_excel = 'CONSOLIDADO.xlsx'
     nombre_hoja = 'Plantilla De Informe'
     df = pd.read_excel(archivo_excel, sheet_name=nombre_hoja)
-    
-    # Identificar columnas clave de forma segura según la estructura del Excel
-    col_unidad = 'UNIDAD FUNCIONAL' if 'UNIDAD FUNCIONAL' in df.columns else df.columns[0]
-    col_detalle = 'C. COSTOS DETALLE' if 'C. COSTOS DETALLE' in df.columns else df.columns[1]
-    col_emisor = 'C. COSTOS ENCAB-EMISOR' if 'C. COSTOS ENCAB-EMISOR' in df.columns else df.columns[2]
-    
-    # Codificación para Machine Learning
-    df['UNIDAD_COD'] = pd.factorize(df[col_unidad])[0]
-    df['DETALLE_COD'] = pd.factorize(df[col_detalle])[0]
-    df['EMISOR_COD'] = pd.factorize(df[col_emisor])[0]
-    
-    features = ['EDAD', 'CANTIDAD', 'UNIDAD_COD', 'DETALLE_COD', 'EMISOR_COD']
-    target = 'VALOR FACTURADO'
-    
-    X = df[features].dropna()
-    y = df.loc[X.index, target]
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    # Modelo Random Forest (Fase 4: Modelado)
-    modelo = RandomForestRegressor(n_estimators=100, random_state=42)
-    modelo.fit(X_train, y_train)
-    
-    return modelo, df, col_unidad, col_detalle, col_emisor
+    return df
 
 try:
-    modelo_rf, df, col_unidad, col_detalle, col_emisor = cargar_y_procesar_datos()
+    df = cargar_datos()
     datos_cargados = True
 except Exception as e:
     datos_cargados = False
-    st.error(f"⚠️ Error al cargar 'CONSOLIDADO.xlsx'. Asegúrate de subirlo a GitHub. Detalle: {e}")
+    st.error(f"⚠️ Error al cargar el archivo institucional 'CONSOLIDADO.xlsx'. Asegúrate de subirlo al repositorio en GitHub. Detalle: {e}")
 
 if datos_cargados:
     
-    # ==============================================================================
-    # FASE 5: EVALUACIÓN FINANCIERA Y COMPARATIVA DE CENTROS DE COSTOS
-    # ==============================================================================
-    st.header("📊 Comparativa de Costos e Ingresos por Centro de Costos")
-    st.markdown("Este módulo permite a la gerencia contrastar el rendimiento financiero y operativo entre las unidades funcionales y los centros de costos.")
+    # Normalización de columnas clave
+    col_unidad = 'UNIDAD FUNCIONAL' if 'UNIDAD FUNCIONAL' in df.columns else df.columns[0]
+    col_detalle = 'C. COSTOS DETALLE' if 'C. COSTOS DETALLE' in df.columns else df.columns[1]
+    col_emisor = 'C. COSTOS ENCAB-EMISOR' if 'C. COSTOS ENCAB-EMISOR' in df.columns else df.columns[2]
+    col_articulo = 'NOMBRE ARTICULO' if 'NOMBRE ARTICULO' in df.columns else df.columns[3]
+    col_factura = 'VALOR FACTURADO' if 'VALOR FACTURADO' in df.columns else 'VALOR'
 
-    # Métricas ejecutivas globales
+    # ==============================================================================
+    # PANEL LATERAL: FILTROS GERENCIALES Y EXPORTACIÓN
+    # ==============================================================================
+    st.sidebar.header("🎛️ Filtros Gerenciales")
+    
+    # Filtro por Unidad Funcional
+    unidades_disponibles = list(df[col_unidad].dropna().unique())
+    unidad_seleccionada = st.sidebar.selectbox("Filtrar por Unidad Funcional", ["Todas"] + unidades_disponibles)
+
+    # Filtrar dataframe según selección
+    if unidad_seleccionada != "Todas":
+        df_filtrado = df[df[col_unidad] == unidad_seleccionada]
+    else:
+        df_filtrado = df.copy()
+
+    st.sidebar.markdown("---")
+    st.sidebar.header("📥 Descarga de Informes")
+    st.sidebar.markdown("Exporte los resultados analíticos para la junta directiva:")
+
+    # Función para convertir dataframe a Excel en memoria para descarga
+    def convertir_a_excel(df_exportar):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_exportar.to_excel(writer, index=False, sheet_name='Informe_Gerencial')
+        processed_data = output.getvalue()
+        return processed_data
+
+    # ==============================================================================
+    # MÉTRICAS EJECUTIVAS GLOBALES
+    # ==============================================================================
+    st.header("📈 Indicadores Financieros Globales")
+    
+    total_facturado = df_filtrado[col_factura].sum()
+    total_atenciones = len(df_filtrado)
+    promedio_atencion = total_facturado / total_atenciones if total_atenciones > 0 else 0
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric(label="💰 Facturación Global Acumulada", value=f"${df['VALOR FACTURADO'].sum():,.0f}")
+        st.metric(label="💰 Facturación Total Acumulada", value=f"${total_facturado:,.2f}")
     with col2:
-        st.metric(label="🏥 Total Registros Analizados", value=f"{df.shape[0]:,}")
+        st.metric(label="📋 Volumen Total de Atenciones", value=f"{total_atenciones:,}")
     with col3:
-        st.metric(label="📈 Promedio por Atenciones", value=f"${df['VALOR FACTURADO'].mean():,.2f}")
+        st.metric(label="📊 Valor Promedio por Atención", value=f"${promedio_atencion:,.2f}")
 
     st.markdown("---")
 
-    # Pestañas de análisis por Centro de Costos y Unidad Funcional
-    tab1, tab2, tab3 = st.tabs(["Unidad Funcional", "Centro de Costos (Detalle)", "Centro de Costos (Emisor)"])
+    # ==============================================================================
+    # MÓDULO 1: ANÁLISIS DE SERVICIOS (Revenue Drivers vs Baja Rentabilidad)
+    # ==============================================================================
+    st.header("💎 Análisis de Servicios: ¿Qué factura más y qué factura menos?")
+    
+    col_s1, col_s2 = st.columns(2)
+
+    # Agrupar por nombre de artículo / servicio
+    resumen_servicios = df_filtrado.groupby(col_articulo)[col_factura].agg(['sum', 'count', 'mean']).reset_index()
+    resumen_servicios.columns = ['Servicio / Artículo', 'Facturación Total ($)', 'Cantidad Atenciones', 'Promedio por Servicio ($)']
+    resumen_servicios = resumen_servicios.sort_values(by='Facturación Total ($)', ascending=False)
+
+    with col_s1:
+        st.subheader("🏆 Top 10 Servicios Estrella (Mayor Ingreso)")
+        st.markdown("Procedimientos que sostienen el balance financiero positivo.")
+        top_10 = resumen_servicios.head(10).set_index('Servicio / Artículo')['Facturación Total ($)']
+        st.bar_chart(top_10, color="#1f77b4")
+
+    with col_s2:
+        st.subheader("⚠️ Servicios de Menor Impacto / Facturación")
+        st.markdown("Procedimientos con baja aportación a la caja institucional.")
+        bottom_10 = resumen_servicios.tail(10).set_index('Servicio / Artículo')['Facturación Total ($)']
+        st.bar_chart(bottom_10, color="#ff7f0e")
+
+    # Botón de descarga del reporte de servicios
+    excel_servicios = convertir_a_excel(resumen_servicios)
+    st.download_button(
+        label="📥 Descargar Reporte Completo de Servicios (Excel)",
+        data=excel_servicios,
+        file_name="reporte_servicios_financieros.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    st.markdown("---")
+
+    # ==============================================================================
+    # MÓDULO 2: COMPARATIVA POR CENTROS DE COSTOS Y UNIDADES FUNCIONALES
+    # ==============================================================================
+    st.header("🏢 Rendimiento por Centros de Costos y Unidades Funcionales")
+
+    tab1, tab2, tab3 = st.tabs(["Unidad Funcional", "C. Costos Detalle", "C. Costos Emisor"])
 
     with tab1:
-        st.subheader("Rendimiento Financiero por Unidad Funcional")
-        df_unidad = df.groupby(col_unidad)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
-        st.bar_chart(df_unidad.set_index(col_unidad), color="#20B2AA")
-        st.dataframe(df_unidad, use_container_width=True)
+        st.subheader("Facturación por Unidad Funcional")
+        df_u = df_filtrado.groupby(col_unidad)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
+        st.bar_chart(df_u.set_index(col_unidad), color="#2ca02c")
+        st.dataframe(df_u, use_container_width=True)
 
     with tab2:
-        st.subheader("Rendimiento por Centro de Costos Detalle")
-        df_detalle = df.groupby(col_detalle)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
-        st.bar_chart(df_detalle.set_index(col_detalle), color="#4682B4")
-        st.dataframe(df_detalle, use_container_width=True)
+        st.subheader("Facturación por Centro de Costos Detalle")
+        df_d = df_filtrado.groupby(col_detalle)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
+        st.bar_chart(df_d.set_index(col_detalle), color="#d62728")
+        st.dataframe(df_d, use_container_width=True)
 
     with tab3:
-        st.subheader("Rendimiento por Centro de Costos Emisor")
-        df_emisor = df.groupby(col_emisor)['VALOR FACTURADO'].sum().reset_index().sort_values(by='VALOR FACTURADO', ascending=False)
-        st.bar_chart(df_emisor.set_index(col_emisor), color="#9370DB")
-        st.dataframe(df_emisor, use_container_width=True)
+        st.subheader("Facturación por Centro de Costos Emisor")
+        df_e = df_filtrado.groupby(col_emisor)[col_factura].sum().reset_index().sort_values(by=col_factura, ascending=False)
+        st.bar_chart(df_e.set_index(col_emisor), color="#9467bd")
+        st.dataframe(df_e, use_container_width=True)
 
-    # ==============================================================================
-    # FASE 6: SIMULADOR PREDICTIVO (Panel Lateral)
-    # ==============================================================================
-    st.sidebar.header("🛠️ Simulador Predictivo de Costos")
-    st.sidebar.markdown("Estime la facturación según los centros de costos:")
-
-    edad = st.sidebar.slider("Edad del Paciente", 0, 100, 35)
-    cantidad = st.sidebar.number_input("Cantidad", min_value=1, max_value=50, value=1)
-
-    unidad_lista = df[col_unidad].dropna().unique()
-    unidad_sel = st.sidebar.selectbox("Unidad Funcional", unidad_lista)
-
-    detalle_lista = df[col_detalle].dropna().unique()
-    detalle_sel = st.sidebar.selectbox("C. Costos Detalle", detalle_lista)
-
-    emisor_lista = df[col_emisor].dropna().unique()
-    emisor_sel = st.sidebar.selectbox("C. Costos Emisor", emisor_lista)
-
-    # Codificación de la selección del usuario
-    u_cod = list(unidad_lista).index(unidad_sel)
-    d_cod = list(detalle_lista).index(detalle_sel)
-    e_cod = list(emisor_lista).index(emisor_sel)
-
-    if st.sidebar.button("🚀 Calcular Valor Estimado", type="primary"):
-        entrada = pd.DataFrame({
-            'EDAD': [edad],
-            'CANTIDAD': [cantidad],
-            'UNIDAD_COD': [u_cod],
-            'DETALLE_COD': [d_cod],
-            'EMISOR_COD': [e_cod]
-        })
-        
-        prediccion = modelo_rf.predict(entrada)[0]
-        st.sidebar.success(f"### 💰 Estimado: ${prediccion:,.2f}")
+    # Botón global de descarga de datos filtrados
+    st.markdown("---")
+    st.subheader("📦 Exportar Base de Datos Consolidada")
+    excel_global = convertir_a_excel(df_filtrado)
+    st.download_button(
+        label="📥 Descargar Base de Datos Filtrada para Gerencia (.xlsx)",
+        data=excel_global,
+        file_name="datos_financieros_hospital_yotoco.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
